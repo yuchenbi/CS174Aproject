@@ -1,14 +1,12 @@
 package cs174a;                                             // THE BASE PACKAGE FOR YOUR APP MUST BE THIS ONE.  But you may add subpackages.
 
 // You may have as many imports as you need.
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Date;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.Properties;
 import oracle.jdbc.pool.OracleDataSource;
 import oracle.jdbc.OracleConnection;
+import oracle.jdbc.proxy.annotation.Pre;
+
 import java.util.ArrayList;
 
 /**
@@ -38,23 +36,16 @@ public class App implements Testable
 		// Statement and ResultSet are AutoCloseable and closed automatically.
 		try( Statement statement = _connection.createStatement() )
 		{
-//			try( ResultSet resultSet = statement.executeQuery("drop table SOME;" +
-//					"create table SOME2(" +
-//					"firstVa VARCHAR(20)," +
-//					"Primary key (firstVa));" +
-//					"create table some3(" +
-//					"firstVa VARCHAR(20)," +
-//					"Primary key (firstVa)," +
-//					"Foreign key (firstVa) references SOME2);"))
-//			{
-//				while( resultSet.next() )
-//					System.out.println( resultSet.getString( 1 ) + " " + resultSet.getString( 2 ) + " " );
-//			}
+			PreparedStatement seeAll = null;
+			String allNames = "select table_name from all_tables where owner = ?";
+			seeAll = _connection.prepareStatement(allNames);
+			seeAll.setString(1, _connection.getUserName());
 
-			try( ResultSet resultSet = statement.executeQuery( "select owner, table_name from all_tables where owner = 'C##SIHUA'" ) )
+			//try( ResultSet resultSet = statement.executeQuery( "select owner, table_name from all_tables where owner = 'C##SIHUA'" ) )\
+			try(ResultSet resultSet = seeAll.executeQuery())
 			{
 				while( resultSet.next() )
-					System.out.println( resultSet.getString( 1 ) + " " + resultSet.getString( 2 ) + " " );
+					System.out.println( resultSet.getString( 1 ) + " " );
 			}
 		}
 		catch( SQLException e )
@@ -63,18 +54,76 @@ public class App implements Testable
 		}
 	}
 
-
+	@Override
 	public String dropTables()
 	{
-		ArrayList<String> needed = new ArrayList<String>;
-		needed.add("drop table relate");
-		needed.add("drop table transaction");
-		needed.add("drop table ")
+
+
+		ArrayList<String> needed = new ArrayList<String>();
+
+		needed.add("drop table related");
+		needed.add("drop table transactions");
+		needed.add("drop table pocketaccount");
+		needed.add("drop table normalaccount");
+		needed.add("drop table team");
+		needed.add("drop table customers");
+		needed.add("drop table some");
+
+		try(Statement statement = _connection.createStatement())
+		{
+			for(String within: needed)
+			{
+				statement.execute(within);
+			}
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+		}
+//		PreparedStatement seeAll = null;
+//		PreparedStatement dropAll = null;
+//		String allNames = "select table_name from all_tables where owner = ?";
+//		String dropThe = "drop table ";
+//		try
+//		{
+//
+//			seeAll = _connection.prepareStatement(allNames);
+//			seeAll.setString(1, _connection.getUserName());
+//		}
+//		catch(SQLException e)
+//		{
+//			System.err.println(e.getMessage());
+//			return "1";
+//		}
+//
+//		try(ResultSet resultSet = seeAll.executeQuery())
+//		{
+//
+//			while(resultSet.next())
+//			{
+//				needed.add(resultSet.getString(1));
+//			}
+//			for(String within:needed)
+//			{
+//				String temp = dropThe;
+//				temp += within;
+//				dropAll = _connection.prepareStatement(temp);
+//				dropAll.execute();
+//			}
+//		}
+//		catch(SQLException e)
+//		{
+//			System.err.println(e.getMessage());
+//			return "1";
+//		}
+//
+		return "0";
 	}
 
+	@Override
 	public String createTables()
 	{
-		ArrayList<String> needed = new ArrayList<String>;
+		ArrayList<String> needed = new ArrayList<String>();
 
 		needed.add("create table customer(" +
 				"taxid varchar2(20)," +
@@ -131,16 +180,16 @@ public class App implements Testable
 		{
 			for(String within: needed)
 			{
-				statement.executeQuery(within);
+				statement.execute(within);
 			}
 		}
 		catch(SQLException e)
 		{
 			System.err.println(e.getMessage());
-			return 1;
+			return "1";
 		}
 
-		return 0;
+		return "0";
 
 	}
 
