@@ -151,12 +151,13 @@ public class App implements Testable
 		needed.add("create table account(" +
 				"accountid varchar2(20)," +
 				"type varchar2(20)," +
-				"status varchar2(5)," +
+				"status varchar2(10)," +
 				"interest number(38,2)," +
 				"balance number(38,2)," +
 				"bankband varchar2(20)," +
 				"owned varchar2(20) not null," +
 				"primary key (accountid)," +
+				"constraint minBalance check (balance >= 0)," +
 				"foreign key (owned) references team(teamid))");
 		needed.add("create table pocketaccount(" +
 				"accountid varchar2(20)," +
@@ -197,7 +198,44 @@ public class App implements Testable
 
 	}
 
+	@Override
+	public String topUp(String accountId, double amount) {
+		return null;
+	}
 
+	@Override
+	public String createPocketAccount(String id, String linkedId, double initialTopUp, String tin) {
+		String getOwner = "select A.bankband, A.owned from Account A where A.accountid = ?";
+		String branch = null;
+		String owner = null;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(getOwner)) {
+			preparedStatement.setString(1, linkedId);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if (!resultSet.next())
+				throw new SQLException("No normal accounts found");
+			else
+			{
+				branch = resultSet.getString(1);
+				owner = resultSet.getString(2);
+			}
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+
+
+		String insertion = "insert into account values(?,'pocket', 'open', 0, ?,?,? )";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(insertion))
+		{
+			preparedStatement.setString(1, id);
+			preparedStatement.setDouble(2, initialTopUp);
+			preparedStatement
+		}
+		return "0";
+	}
 
 	////////////////////////////// Implement all of the methods given in the interface /////////////////////////////////
 	// Check the Testable.java interface for the function signatures and descriptions.
@@ -270,25 +308,37 @@ public class App implements Testable
 			ResultSet resultSet = count.executeQuery();
 			if(resultSet.getInt(1) == 0)
 				return "1";
-
-			selection = "select count(*) from Customer C where C.tin = ?";
-			try(PreparedStatement count2 = _connection.prepareStatement(selection))
-			{
-				count2.setString(1, tin);
-				resultSet = count2.executeQuery();
-				if(resultSet.getInt(1) > 0)
-					return "1";
-			}
+//
+//			selection = "select count(*) from Customer C where C.tin = ?";
+//			try(PreparedStatement count2 = _connection.prepareStatement(selection))
+//			{
+//				count2.setString(1, tin);
+//				resultSet = count2.executeQuery();
+//				if(resultSet.getInt(1) > 0)
+//					return "1";
+//			}
 
 		}catch (SQLException e)
 		{
+			System.err.println(e.getMessage());
 			return "1";
 		}
 
-		String insertion = "insert into Customer ";
 
 
+		String insertion = "insert into Customer values(?, ?, 1717, ?)";
+		try(PreparedStatement insert = _connection.prepareStatement(insertion))
+		{
+			insert.setString(1, tin);
+			insert.setString(2, name);
+			insert.setString(3, address);
+			insert.execute();
 
+		}catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
 
 
 		return "0";

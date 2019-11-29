@@ -81,7 +81,7 @@ interface Testable
 	 *         balance is the account's initial balance with up to 2 decimal places (e.g. 1000.12, as with %.2f); and
 	 *         tin is the Tax ID of account's primary owner.
 	 */
-	//String createPocketAccount( String id, String linkedId, double initialTopUp, String tin );
+	String createPocketAccount( String id, String linkedId, double initialTopUp, String tin );
 
 	/**
 	 * Create a new customer and link them to an existing checking or saving account.
@@ -122,7 +122,7 @@ interface Testable
 	 *         linkedNewBalance is the new balance of linked account, with up to 2 decimal places (e.g. with %.2f); and
 	 *         pocketNewBalance is the new balance of the pocket account.
 	 */
-	//String topUp( String accountId, double amount );
+	String topUp( String accountId, double amount );
 
 	/**
 	 * Move a specified amount of money from one pocket account to another pocket account.
