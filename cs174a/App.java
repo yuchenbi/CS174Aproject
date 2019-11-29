@@ -2,11 +2,15 @@ package cs174a;                                             // THE BASE PACKAGE 
 
 // You may have as many imports as you need.
 import java.sql.*;
+import java.text.DecimalFormat;
 import java.util.Properties;
+
+import com.sun.jdi.event.StepEvent;
 import oracle.jdbc.pool.OracleDataSource;
 import oracle.jdbc.OracleConnection;
 import oracle.jdbc.proxy.annotation.Pre;
 
+import javax.swing.plaf.nimbus.State;
 import java.util.ArrayList;
 
 /**
@@ -24,6 +28,7 @@ public class App implements Testable
 	 */
 	App()
 	{
+
 		systemDate = Date.valueOf("2015-10-15");
 		// TODO: Any actions you need.
 	}
@@ -61,13 +66,13 @@ public class App implements Testable
 
 		ArrayList<String> needed = new ArrayList<String>();
 
-		needed.add("drop table related");
-		needed.add("drop table transactions");
+		needed.add("drop table relate");
+		needed.add("drop table transaction");
 		needed.add("drop table pocketaccount");
-		needed.add("drop table normalaccount");
+		needed.add("drop table account");
+		needed.add("drop table belongs");
 		needed.add("drop table team");
-		needed.add("drop table customers");
-		needed.add("drop table some");
+		needed.add("drop table customer");
 
 		try(Statement statement = _connection.createStatement())
 		{
@@ -79,6 +84,7 @@ public class App implements Testable
 		catch(SQLException e)
 		{
 			System.err.println(e.getMessage());
+			return "1";
 		}
 //		PreparedStatement seeAll = null;
 //		PreparedStatement dropAll = null;
@@ -157,8 +163,7 @@ public class App implements Testable
 				"linkedid varchar2(20) not null," +
 				"primary key (accountid)," +
 				"foreign key (accountid) references account," +
-				"foreign key (linkedid) references account(accountid)," +
-				"check ('Pocket' = (select A.type from Account A where A.accountid = accountid) and 'Pocket' <> (select A.type from Account A where A.accountid = linkedid)))");
+				"foreign key (linkedid) references account(accountid))");
 		needed.add("create table transaction(" +
 				"transid varchar2(20)," +
 				"amount number(38,2)," +
@@ -167,7 +172,7 @@ public class App implements Testable
 				"clientfrom varchar2(20) not null," +
 				"clientto varchar2(20) not null," +
 				"primary key (transid)," +
-				"foreign key (clientfrom) references account(acoountid)," +
+				"foreign key (clientfrom) references account(accountid)," +
 				"foreign key (clientto) references account(accountid))");
 		needed.add("create table relate(" +
 				"accountid varchar2(20)," +
@@ -186,7 +191,6 @@ public class App implements Testable
 		catch(SQLException e)
 		{
 			System.err.println(e.getMessage());
-			return "1";
 		}
 
 		return "0";
@@ -238,12 +242,65 @@ public class App implements Testable
 		}
 	}
 
+	@Override
+	public String showBalance(String accountId) {
+		String que = "select A.balance from Account A where A.accountid = ?";
+		try(PreparedStatement seeBalance = _connection.prepareStatement(que))
+		{
+			seeBalance.setString(1, accountId);
+			ResultSet resultSet = seeBalance.executeQuery();
+			double store = resultSet.getDouble(1);
+			DecimalFormat df = new DecimalFormat("#.##");
+			System.out.println("Account "+accountId + " Balance" + df.format(store));
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return "0";
+	}
+
+	@Override
+	public String createCustomer(String accountId, String tin, String name, String address) {
+		String selection = "select count(*) from Account A where A.accountid = ?";
+		try(PreparedStatement count = _connection.prepareStatement(selection))
+		{
+			count.setString(1, accountId);
+			ResultSet resultSet = count.executeQuery();
+			if(resultSet.getInt(1) == 0)
+				return "1";
+
+			selection = "select count(*) from Customer C where C.tin = ?";
+			try(PreparedStatement count2 = _connection.prepareStatement(selection))
+			{
+				count2.setString(1, tin);
+				resultSet = count2.executeQuery();
+				if(resultSet.getInt(1) > 0)
+					return "1";
+			}
+
+		}catch (SQLException e)
+		{
+			return "1";
+		}
+
+		String insertion = "insert into Customer ";
+
+
+
+
+
+		return "0";
+	}
+
 	/**
 	 * Example of one of the testable functions.
 	 */
 	@Override
 	public String listClosedAccounts()
 	{
+
 		return "0 it works!";
 	}
 
@@ -253,6 +310,7 @@ public class App implements Testable
 	@Override
 	public String createCheckingSavingsAccount( AccountType accountType, String id, double initialBalance, String tin, String name, String address )
 	{
+		String inserting = "insert into Account Values()";
 
 		return "0 " + id + " " + accountType + " " + initialBalance + " " + tin;
 	}
