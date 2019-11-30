@@ -102,7 +102,7 @@ interface Testable
 	 *         old is the old account balance, with up to 2 decimal places (e.g. 1000.12, as with %.2f); and
 	 *         new is the new account balance, with up to 2 decimal places.
 	 */
-	//String deposit( String accountId, double amount );
+	String deposit( String accountId, double amount );
 
 	/**
 	 * Show an account balance (regardless of type of account).
