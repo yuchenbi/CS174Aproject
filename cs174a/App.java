@@ -477,10 +477,55 @@ public class App implements Testable
 
 	}
 
-	private String addToTeam(String teamId, String taxid)
+	private String addToTeam(int teamId, String taxid)
 	{
-		String select = "select A";
-		return "1";
+		String exists = "select B.* from Belongs B where B.teamid = ? and B.taxid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(exists))
+		{
+			preparedStatement.setInt(1, teamId);
+			preparedStatement.setString(2, taxid);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				throw new SQLException("Already exists in team");
+			}
+		}catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		String select = "select B.* from Belongs B where B.teamid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(select))
+		{
+			preparedStatement.setInt(1, teamId);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				String insert = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insert))
+				{
+					preparedStatement1.setInt(1, teamId);
+					preparedStatement1.setString(2, taxid);
+					preparedStatement1.execute();
+				}
+			}
+			else
+			{
+				String addteam = "insert into Team values(null, ?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(addteam))
+				{
+					preparedStatement1.setString(1, taxid);
+				}
+			}
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return "0";
 	}
 
 
@@ -576,18 +621,21 @@ public class App implements Testable
 	public String createCheckingSavingsAccount( AccountType accountType, String id, double initialBalance, String tin, String name, String address )
 	{
 		String existing = "select C.* from Customer C where C.taxid = ?";
-//		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
-//		{
-//			preparedStatement.setString(1, tin);
-//			ResultSet resultSet = preparedStatement.executeQuery();
-//			if(!resultSet.next())
-//
-//		}
-//		catch(SQLException e)
-//		{
-//			System.err.println(e.getMessage());
-//			return "1";
-//		}
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
+		{
+			preparedStatement.setString(1, tin);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				simplyCustomer(tin, name, address);
+
+
+
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
 
 
 
