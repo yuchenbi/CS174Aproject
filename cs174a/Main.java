@@ -26,7 +26,7 @@ public class Main
 		if( r.equals( "0" ) )
 		{
 			app.exampleAccessToDB();                // Example on how to connect to the DB.
-
+//
 			app.dropTables();
 			app.createTables();
 
