@@ -5,7 +5,6 @@ import java.sql.*;
 import java.text.DecimalFormat;
 import java.util.Properties;
 
-import com.sun.jdi.event.StepEvent;
 import oracle.jdbc.pool.OracleDataSource;
 import oracle.jdbc.OracleConnection;
 import oracle.jdbc.proxy.annotation.Pre;
@@ -59,10 +58,110 @@ public class App implements Testable
 		}
 	}
 
+
+
+	public ArrayList<String> getAllAccount(String taxid) {
+		String getBelongs = "select B.* from belongs B where B.taxid = ?";
+		ResultSet belongs;
+		ArrayList<String> teamID = new ArrayList<String>();
+		ArrayList<String> nothing = new ArrayList<String>();
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(getBelongs)) {
+			preparedStatement.setString(1, taxid);
+			belongs = preparedStatement.executeQuery();
+//			belongs.next();
+			while(belongs.next()) {
+				teamID.add(belongs.getString("teamid"));
+			}
+//			if(!belongs.next())
+//				throw new SQLException("No  TaxID matching. ");
+//			teamID = belongs.getString("teamid");
+		}catch(SQLException e) {
+			System.err.println(e.getMessage());
+			return nothing;
+		}
+		String getAccounts = "select A.* from account A where A.owned = ?";
+		ResultSet Accounts;
+		ArrayList<String> accountID = new ArrayList<String>();
+		for(int i = 0; i < teamID.size(); i++) {
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(getAccounts)) {
+				preparedStatement.setString(1, teamID.get(i));
+				Accounts = preparedStatement.executeQuery();
+				if(!Accounts.next())
+					throw new SQLException("No  TaxID matching. ");
+				accountID.add(Accounts.getString("type"));
+				accountID.add(Accounts.getString("accountid"));
+
+			}catch(SQLException e) {
+				System.err.println(e.getMessage());
+				return nothing;
+			}
+		}
+
+		return accountID;
+	}
+
+
+
+
+	public String getPin(String taxid) {
+		String getPin = "select C.* from customer C where C.taxid =?";
+		ResultSet resultSet;
+		String pin;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(getPin)) {
+			preparedStatement.setString(1, taxid);
+			resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("No  TaxID matching. ");
+			pin = resultSet.getString("pin");
+		} catch(SQLException e) {
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return pin;
+	}
+
+	public String insertCostumer(String taxid, String name, String pin, String address)
+	{
+		String insertion = "insert into customer values(?,?,?,?)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(insertion))
+		{
+			preparedStatement.setString(1, taxid);
+			preparedStatement.setString(2, name);
+			preparedStatement.setString(3, pin);
+			preparedStatement.setString(4, address);
+			preparedStatement.execute();
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		String selection = "select * from customer";
+		try(Statement statement = _connection.createStatement())
+		{
+			ResultSet resultSet = statement.executeQuery(selection);
+
+			System.out.println("Account:");
+			while(resultSet.next())
+				System.out.println(resultSet.getString(3));
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		return "0";
+	}
+
 	@Override
 	public String deposit(String accountId, double amount) {
 
 		String updateBalance = "select A.* from Account A where A.accountid = ?";
+		double old = 0;
+		double newed = 0;
 
 		try(PreparedStatement preparedStatement = _connection.prepareStatement(updateBalance, ResultSet.TYPE_SCROLL_SENSITIVE,
 				ResultSet.CONCUR_UPDATABLE))
@@ -76,10 +175,24 @@ public class App implements Testable
 			if(resultSet.getString("STATUS").equals("CLOSE"))
 				throw new SQLException("No deposit allowed on closed account");
 
+			old = resultSet.getDouble("balance");
+			newed = old + amount;
+
 			resultSet.updateDouble("BALANCE", resultSet.getDouble("BALANCE") + amount);
 			resultSet.updateRow();
 
-			String addTransaction = "insert into Transaction values()";
+			String addTransaction = "insert into Transaction values(null, ?, ?, ?, 'DEPOSIT', ?,?)";
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement(addTransaction))
+			{
+				preparedStatement1.setDouble(1, amount);
+				preparedStatement1.setDouble(2, newed);
+				preparedStatement1.setDate(3, systemDate);
+				preparedStatement1.setString(4, accountId);
+				preparedStatement1.setString(5,accountId);
+				preparedStatement1.execute();
+			}
+
+
 
 		}
 		catch(SQLException e)
@@ -88,7 +201,7 @@ public class App implements Testable
 			return "1";
 		}
 
-		return null;
+		return "0 "+ old + " " + newed;
 	}
 
 	@Override
@@ -252,21 +365,261 @@ public class App implements Testable
 
 	}
 
-	@Override
-	public String topUp(String accountId, double amount) {
-		String selection = "select A from pocketaccount A where A.accountid = ?";
+	public String payFriend(String accountId1, String accountId2, double amount) {
+	String selection = "select A.* from account A where A.accountid = ?";
+	double afterbalance = 0;
+	double accountbalance = 0;
+	double monthlyCharge1 = 0.0;
+	double monthlyCharge2 = 0.0;
+	try(PreparedStatement preparedStatement = _connection.prepareStatement(selection, ResultSet.TYPE_SCROLL_SENSITIVE,
+			ResultSet.CONCUR_UPDATABLE)) {
+		preparedStatement.setString(1, accountId1);
+		ResultSet resultSet1 = preparedStatement.executeQuery();
+		resultSet1.next();
+
+		try(PreparedStatement statement = _connection.prepareStatement("select T.* from transaction T where T.clientfrom = ? or T.clientto = ?" )) {
+			statement.setString(1, accountId1);
+			statement.setString(2, accountId1);
+			ResultSet resultSet2 = statement.executeQuery();
+			if(!resultSet2.next()) {
+				monthlyCharge1 = 5.0;
+			}
+		}
+
+
+		try(PreparedStatement statement = _connection.prepareStatement("select T.* from transaction T where T.clientfrom = ? or T.clientto = ?" )) {
+			statement.setString(1, accountId2);
+			statement.setString(2, accountId2);
+			ResultSet resultSet3 = statement.executeQuery();
+			if(!resultSet3.next()) {
+				monthlyCharge2 = 5.0;
+			}
+		}
+
+
+
+		if(resultSet1.getString("STATUS").equals("CLOSE"))
+			throw new SQLException("Can't operate on closed Pocket Account");
+		else if(resultSet1.getDouble("BALANCE") < (amount+monthlyCharge1))
+			throw new SQLException("Pocket Account Balance too low for pay-friend");
+		else {
+			afterbalance = resultSet1.getDouble("BALANCE") - (amount+monthlyCharge1);
+			if(resultSet1.getDouble("Balance") - (amount+monthlyCharge1) <= 0.01)
+				resultSet1.updateString("STATUS", "CLOSE");
+			resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") - (amount+monthlyCharge1));
+			resultSet1.updateRow();
+		}
+
+
+
+		try(PreparedStatement statement = _connection.prepareStatement("select A.* from Account A where A.accountid = ?"))
+		{
+			statement.setString(1, accountId2);
+			ResultSet resultSet4 = statement.executeQuery();
+			if(!resultSet4.next()) {
+				throw new SQLException(accountId2 + " is not in the system.");
+			} else if(!resultSet4.getString("TYPE").equals("pocket")) {
+				throw new SQLException("The account you are paying to is not a Pocket Account");
+			} else if(resultSet4.getString("STATUS").equals("CLOSE")) {
+				throw new SQLException("Can't operate on others' closed Pocket Account");
+			}
+			else if(resultSet4.getDouble("BALANCE") + amount < monthlyCharge2) {
+				throw new SQLException("Other's Pocket Account Balance too low for paying");
+			}
+		}
+
+		try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'Pay-friend', ?, ? )"))
+		{
+			statement1.setDouble(1, amount);
+			statement1.setDouble(2, afterbalance);
+			statement1.setDate(3, systemDate);
+			statement1.setString(4, accountId1);
+			statement1.setString(5, accountId2);
+			statement1.execute();
+		}
+		
+	}catch (SQLException e) {
+		System.err.println(e.getMessage());
+		return "1";
+	}
+	return "0";
+}
+
+
+
+
+
+	public String purchase(String accountId, double amount) {
+		String selection = "select A.* from account A where A.accountid = ?";
+		double afterbalance = 0;
+		double accountbalance = 0;
+		double monthlyCharge = 0.0;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection, ResultSet.TYPE_SCROLL_SENSITIVE,
+				ResultSet.CONCUR_UPDATABLE)) {
+			preparedStatement.setString(1, accountId);
+			ResultSet resultSet1 = preparedStatement.executeQuery();
+			resultSet1.next();
+
+			try(PreparedStatement statement = _connection.prepareStatement("select T.* from transaction T where T.clientfrom = ? or T.clientto = ?" )) {
+				statement.setString(1, accountId);
+				statement.setString(2, accountId);
+				ResultSet resultSet2 = statement.executeQuery();
+				if(!resultSet2.next()) {
+					monthlyCharge = 5.0;
+				}
+			}
+
+			if(resultSet1.getString("STATUS").equals("CLOSE"))
+				throw new SQLException("Can't operate on closed Pocket Account");
+			else if(resultSet1.getDouble("BALANCE") < (amount+monthlyCharge))
+				throw new SQLException("Pocket Account Balance too low for purchase");
+			else {
+				afterbalance = resultSet1.getDouble("BALANCE") - (amount+monthlyCharge);
+				if(resultSet1.getDouble("Balance") - (amount+monthlyCharge) <= 0.01)
+					resultSet1.updateString("STATUS", "CLOSE");
+				resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") - (amount+monthlyCharge));
+				resultSet1.updateRow();
+			}
+
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'PURCHASE', ?, ? )"))
+			{
+				statement1.setDouble(1, amount);
+				statement1.setDouble(2, afterbalance);
+				statement1.setDate(3, systemDate);
+				statement1.setString(4, accountId);
+				statement1.setString(5, accountId);
+				statement1.execute();
+			}
+		} catch (SQLException e) {
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return "0";
+	}
+
+	public String collect(String accountId, double amount) {
+		String selection = "select A.* from pocketaccount A where A.accountid = ?";
 		String linkedId = null;
 		double afterbalance = 0;
+		double accountbalance = 0;
+		double monthlyCharge = 0;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection)) {
+			preparedStatement.setString(1, accountId);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("No pocket account specified in collect");
+			linkedId = resultSet.getString("linkedid");
+
+
+			try(PreparedStatement statement = _connection.prepareStatement("select T.* from transaction T where T.clientfrom = ? or T.clientto = ?" )) {
+				statement.setString(1, accountId);
+				statement.setString(2, accountId);
+				ResultSet resultSet2 = statement.executeQuery();
+				if(!resultSet2.next()) {
+					monthlyCharge = 5.0;
+				}
+			}
+
+
+
+			try(PreparedStatement statement = _connection.prepareStatement("select A.* from Account A where A.accountid = ?"))
+			{
+				statement.setString(1, accountId);
+				ResultSet resultSet1 = statement.executeQuery();
+				resultSet1.next();
+				if(resultSet1.getString("STATUS").equals("CLOSE")) {
+					throw new SQLException("Can't operate on closed Pocket Account");
+				}
+				else if(resultSet1.getDouble("BALANCE") < (amount*1.03+monthlyCharge)) {
+					throw new SQLException("Pocket Account Balance too low for collect");
+				}
+			}
+
+			try(PreparedStatement statement = _connection.prepareStatement("Select A.* from Account A where A.accountid = ?",ResultSet.TYPE_SCROLL_SENSITIVE,
+					ResultSet.CONCUR_UPDATABLE))
+			{
+				statement.setString(1, linkedId);
+				ResultSet resultSet1 = statement.executeQuery();
+				resultSet1.next();
+				if(resultSet1.getString("STATUS").equals("CLOSE"))
+					throw new SQLException("No transaction allowed on closed account");
+				else
+				{
+					afterbalance = resultSet1.getDouble("BALANCE") + amount;
+					resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") + amount);
+
+					resultSet1.updateRow();
+				}
+			}
+
+
+			try(PreparedStatement statement = _connection.prepareStatement("select A.* from Account A where A.accountid = ?",ResultSet.TYPE_SCROLL_SENSITIVE,
+					ResultSet.CONCUR_UPDATABLE))
+			{
+				statement.setString(1, accountId);
+				ResultSet resultSet1 = statement.executeQuery();
+				if(!resultSet1.next())
+					throw new SQLException("No pocket account id recorded");
+				else {
+					afterbalance = resultSet1.getDouble("BALANCE") - (amount*1.03+monthlyCharge);
+					if(resultSet1.getDouble("Balance") - (amount*1.03+monthlyCharge) <= 0.01)
+						resultSet1.updateString("STATUS", "CLOSE");
+					resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") - (amount*1.03+monthlyCharge));
+
+					resultSet1.updateRow();
+				}
+			}
+
+
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'Collect', ?, ? )"))
+			{
+				statement1.setDouble(1, amount);
+				statement1.setDouble(2, afterbalance);
+				statement1.setDate(3, systemDate);
+				statement1.setString(4, accountId);
+				statement1.setString(5, linkedId);
+				statement1.execute();
+			}
+			return "1";
+
+		}catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+	}
+
+	@Override
+	public String topUp(String accountId, double amount) {
+		String selection = "select A.* from pocketaccount A where A.accountid = ?";
+		String linkedId = null;
+		double afterbalance = 0;
+		double accountbalance = 0;
+		double monthlyCharge = 0;
+
+
+
 		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection))
 		{
 			preparedStatement.setString(1, accountId);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if(!resultSet.next())
-				throw new SQLException("No account specified in topUP");
+				throw new SQLException("No pocket account specified in topUP");
 
-			linkedId = resultSet.getString(2);
 
-			try(PreparedStatement statement = _connection.prepareStatement("select A from Account A where A.accountid = ?"))
+			linkedId = resultSet.getString("linkedid");
+
+
+			try(PreparedStatement statement = _connection.prepareStatement("select T.* from transaction T where T.clientfrom = ? or T.clientto = ?" )) {
+				statement.setString(1, accountId);
+				statement.setString(2, accountId);
+				ResultSet resultSet2 = statement.executeQuery();
+				if(!resultSet2.next()) {
+					monthlyCharge = 5.0;
+				}
+			}
+
+			try(PreparedStatement statement = _connection.prepareStatement("select A.* from Account A where A.accountid = ?"))
 			{
 				statement.setString(1, accountId);
 				ResultSet resultSet1 = statement.executeQuery();
@@ -276,7 +629,7 @@ public class App implements Testable
 
 			}
 
-			try(PreparedStatement statement = _connection.prepareStatement("Select A from Account A where A.accountid = ?",ResultSet.TYPE_SCROLL_SENSITIVE,
+			try(PreparedStatement statement = _connection.prepareStatement("Select A.* from Account A where A.accountid = ?",ResultSet.TYPE_SCROLL_SENSITIVE,
 					ResultSet.CONCUR_UPDATABLE))
 			{
 				statement.setString(1, linkedId);
@@ -284,48 +637,56 @@ public class App implements Testable
 				resultSet1.next();
 				if(resultSet1.getString("STATUS").equals("CLOSE"))
 					throw new SQLException("No transaction allowed on closed account");
-				else if(resultSet1.getDouble("BALANCE") < amount)
+				else if(resultSet1.getDouble("BALANCE") < (amount+monthlyCharge))
 					throw new SQLException("Linked Account Balance too low for topup");
 				else
 				{
-					afterbalance = resultSet1.getDouble("BALANCE") - amount;
-					resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") - amount);
+					afterbalance = resultSet1.getDouble("BALANCE") - (amount+monthlyCharge);
+					if(resultSet1.getDouble("Balance") - (amount+monthlyCharge) <= 0.01)
+						resultSet1.updateString("STATUS", "CLOSE");
+					resultSet1.updateDouble("BALANCE", resultSet1.getDouble("BALANCE") - (amount+monthlyCharge));
 
 					resultSet1.updateRow();
 				}
 			}
 
-			int records = 0;
 
-			try(PreparedStatement statement = _connection.prepareStatement("select count(*) from transaction"))
+
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'TOPUP', ?, ? )"))
 			{
+				statement1.setDouble(1, amount);
+				statement1.setDouble(2, afterbalance);
+				statement1.setDate(3, systemDate);
+				statement1.setString(4, linkedId);
+				statement1.setString(5, accountId);
+				statement1.execute();
+			}
+
+
+//			try(PreparedStatement statement = _connection.prepareStatement("Update Account A set A.balance = A.balance + ? where A.accountid = ?"))
+			try(PreparedStatement statement = _connection.prepareStatement("select A.* from Account A where A.accountid = ?",ResultSet.TYPE_SCROLL_SENSITIVE,
+					ResultSet.CONCUR_UPDATABLE))
+			{
+//
+//				statement.setDouble(1, amount);
+				statement.setString(1, accountId);
 				ResultSet resultSet1 = statement.executeQuery();
-				resultSet1.next();
-				records = resultSet1.getInt(1);
-				try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(?, ?, ?, ?, 'TOPUP', ?, ? )"))
-				{
-					statement1.setString(1, ""+records);
-					statement1.setDouble(2, amount);
-					statement1.setDouble(3, afterbalance);
-					statement1.setDate(4, systemDate);
-					statement1.setString(5, accountId);
-					statement1.setString(6, linkedId);
-					statement.execute();
-				}
-			}
+				if(!resultSet1.next())
+					throw new SQLException("No pocket account id recorded");
+				accountbalance = resultSet1.getDouble("balance") + amount;
 
-			try(PreparedStatement statement = _connection.prepareStatement("Update Account A set A.balance = A.balance + ? where A.accountid = ?"))
-			{
-				statement.setDouble(1, amount);
-				statement.setString(2, accountId);
-				statement.execute();
+				resultSet1.updateDouble("balance", accountbalance);
+
+				resultSet1.updateRow();
+
+
 			}
 
 
 
 
 
-			return "0";
+			return "0 " + afterbalance + " " + accountbalance;
 
 
 
@@ -340,9 +701,14 @@ public class App implements Testable
 
 	@Override
 	public String createPocketAccount(String id, String linkedId, double initialTopUp, String tin) {
-		String getOwner = "select A.bankband, A.owned, A.balance from Account A where A.accountid = ?";
+		if(initialTopUp <= 5.01)
+		{
+			System.err.println("initial Top Up amount too small");
+			return "1";
+		}
+		String getOwner = "select A.* from Account A where A.accountid = ?";
 		String branch = null;
-		int owner = 0;
+		int teamid = 0;
 		try(PreparedStatement preparedStatement = _connection.prepareStatement(getOwner)) {
 			preparedStatement.setString(1, linkedId);
 			ResultSet resultSet = preparedStatement.executeQuery();
@@ -352,17 +718,63 @@ public class App implements Testable
 			}
 			else
 			{
-				branch = resultSet.getString(1);
-				owner = resultSet.getInt(2);
-				double balance = resultSet.getDouble(3);
+				if(resultSet.getString("STATUS").equals("CLOSE"))
+					throw new SQLException("Can't open Pocket Account on closed Checking/Saving Account");
+
+				if(resultSet.getString("TYPE").equals("POCKET"))
+					throw new SQLException("Can't open Pocket Account on Pocket Account");
+
+				branch = resultSet.getString("bankBand");
+				double balance = resultSet.getDouble("balance");
 
 				if(balance < initialTopUp)
 					throw new SQLException("Initial top up amount larger than balance");
 
 			}
 
+			String insertTeam = "insert into team values(null, ?)";
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertTeam, new String[]{"teamid"}))
+			{
+				preparedStatement1.setString(1, tin);
+				preparedStatement1.executeUpdate();
+
+				ResultSet resultSet1 = preparedStatement1.getGeneratedKeys();
+
+				if(!resultSet1.next())
+					throw new SQLException("Insert into team failed");
+
+				teamid = resultSet1.getInt(1);
+			}
+
+			String insertBelongs = "insert into belongs values(?,?)";
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertBelongs))
+			{
+				preparedStatement1.setInt(1, teamid);
+				preparedStatement1.setString(2, tin);
+				preparedStatement1.execute();
+			}
 
 
+			String insertion = "insert into account values(?,'POCKET', 'OPEN', 0, 0,?,? )";
+			try (PreparedStatement preparedStatement2 = _connection.prepareStatement(insertion)) {
+				preparedStatement2.setString(1, id);
+				preparedStatement2.setString(2, branch);
+				preparedStatement2.setInt(3, teamid);
+				preparedStatement2.execute();
+			}
+
+			insertion = "insert into pocketaccount values(?,?)";
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+			{
+				preparedStatement1.setString(1, id);
+				preparedStatement1.setString(2, linkedId);
+				preparedStatement1.execute();
+			}
+
+
+			topUp(id, initialTopUp);
+
+			return "0 " + id + " " +"POCKET"+" " + initialTopUp + " " + tin;
 
 
 		}
@@ -374,32 +786,16 @@ public class App implements Testable
 
 
 
-		String insertion = "insert into account values(?,'pocket', 'open', 0, 0,?,? )";
-		try (PreparedStatement preparedStatement2 = _connection.prepareStatement(insertion)) {
-			preparedStatement2.setString(1, id);
-			preparedStatement2.setString(2, branch);
-			preparedStatement2.setInt(3, owner);
-			preparedStatement2.execute();
-		} catch (SQLException e) {
-			System.err.println(e.getMessage());
-			return "1";
-		}
-
-		insertion = "insert into pocketaccount values(?,?)";
-		try(PreparedStatement preparedStatement = _connection.prepareStatement(insertion))
-		{
-			preparedStatement.setString(1, id);
-			preparedStatement.setString(2, linkedId);
-			preparedStatement.execute();
-		}
-		catch(SQLException e)
-		{
-			System.err.println(e.getMessage());
-			return "1";
-		}
 
 
-		return "0";
+
+
+//		String update = "Select A from Account A where A.accountid = ?";
+//		try(PreparedStatement preparedStatement = _connection.prepareStatement(update, ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_UPDATABLE))
+//		{
+//
+//		}
+
 	}
 
 	////////////////////////////// Implement all of the methods given in the interface /////////////////////////////////
@@ -410,8 +806,8 @@ public class App implements Testable
 	{
 		// Some constants to connect to your DB.
 		final String DB_URL = "jdbc:oracle:thin:@cs174a.cs.ucsb.edu:1521/orcl";
-		final String DB_USER = "c##sihua";
-		final String DB_PASSWORD = "7499270";
+		final String DB_USER = "c##yuchenbi";
+		final String DB_PASSWORD = "7499585";
 
 		// Initialize your system.  Probably setting up the DB connection.
 		Properties info = new Properties();
@@ -617,9 +1013,29 @@ public class App implements Testable
 	/**
 	 * Another example.
 	 */
+
+
+
+
+
+
 	@Override
 	public String createCheckingSavingsAccount( AccountType accountType, String id, double initialBalance, String tin, String name, String address )
 	{
+		String type = null;
+		if(accountType == AccountType.SAVINGS)
+			type = "SAVING";
+		else if(accountType == AccountType.INTEREST_CHECKING)
+			type = "INTEREST";
+		else if(accountType == AccountType.STUDENT_CHECKING)
+			type = "STUDENT";
+		else
+			return "1";
+
+		if(initialBalance < 1000)
+			return "1";
+
+
 		String existing = "select C.* from Customer C where C.taxid = ?";
 		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
 		{
@@ -629,6 +1045,84 @@ public class App implements Testable
 				simplyCustomer(tin, name, address);
 
 
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		existing = "select * from Account A where A.accountid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
+		{
+			preparedStatement.setString(1, id);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				String insertion = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setString(1, resultSet.getString("owned"));
+					preparedStatement1.setString(2, tin);
+					preparedStatement1.execute();
+				}
+
+			}
+			else
+			{
+				String insertion = "insert into Team values(null,?)";
+				int autoGen = 0;
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion,new String[]{"teamid"}))
+				{
+					preparedStatement1.setString(1, tin);
+					int res = preparedStatement1.executeUpdate();
+					if(res == 0)
+						throw new SQLException("something weird");
+					ResultSet resultSet1 = preparedStatement1.getGeneratedKeys();
+					if(resultSet1.next())
+						autoGen = resultSet1.getInt(1);
+					else
+						throw new SQLException("Insertion into Team failed");
+
+
+
+				}
+				insertion = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setInt(1, autoGen);
+					preparedStatement1.setString(2, tin);
+					preparedStatement1.execute();
+				}
+
+				insertion = "insert into Account values(?,?,'OPEN',?, ?,null, ?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setString(1, id);
+					preparedStatement1.setString(2, type);
+					double interest = 0;
+					if(type.equals("SAVING"))
+						interest = 0.048/12;
+					else if(type.equals("INTEREST"))
+						interest = 0.03/12;
+					else
+						interest = 0;
+					preparedStatement1.setDouble(3, interest);
+					preparedStatement1.setDouble(4, initialBalance);
+					preparedStatement1.setInt(5,autoGen);
+					preparedStatement1.execute();
+				}
+				insertion = "insert into Transaction values(null, ?,?,?,'DEPOSIT',?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setDouble(1, initialBalance);
+					preparedStatement1.setDouble(2, initialBalance);
+					preparedStatement1.setDate(3, systemDate);
+					preparedStatement1.setString(4, id);
+					preparedStatement1.setString(5, id);
+					preparedStatement1.execute();
+				}
+			}
 
 		}
 		catch(SQLException e)
@@ -636,6 +1130,8 @@ public class App implements Testable
 			System.err.println(e.getMessage());
 			return "1";
 		}
+
+
 
 
 
