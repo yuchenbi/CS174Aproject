@@ -97,7 +97,8 @@ public class Main
 			ArrayList<String> IChecking = new ArrayList<String>();
 
 //			int i = 0;
-			app.setDate(2011, 3, 1);
+			String temp8 = app.setDate(2011, 3, 1);
+			System.out.println(temp8);
 			app.createCheckingSavingsAccountWithBranch(AccountType.STUDENT_CHECKING, "17431", 1200.00, "344151573", "Joe Pepsi", "3210 State St", "San Francisco");
 			app.setPIN("344151573", "1717", "3692");
 			app.createCustomer("17431", "412231856", "Cindy Laugher", "7000 Hollister");
@@ -162,6 +163,7 @@ public class Main
 			app.createPocketAccountWithBranch("43947", "29107", 30.00, "212116070", "Isla Vista");
 			app.createPocketAccountWithBranch("60413", "43942", 20.00, "400651982", "Santa Cruz");
 			app.createPocketAccountWithBranch("67521", "19023", 100.00, "401605312", "3756 La Cumbre Plaza");
+//			String temp8 = app.showBalance("53027");
 
 //			app.generateMonthlyReport("207843218");
 //			app.generateMonthlyReport("207843218");

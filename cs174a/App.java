@@ -5,6 +5,7 @@ import java.math.BigInteger;
 import java.sql.*;
 import java.sql.Date;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import oracle.jdbc.pool.OracleDataSource;
@@ -977,7 +978,7 @@ public class App implements Testable, BankTeller, Transaction
 			return "1";
 		}
 
-		System.out.println(systemDate);
+		System.out.println(systemDate.toString());
 
 		return "0";
 	}
@@ -1267,7 +1268,7 @@ public class App implements Testable, BankTeller, Transaction
 			return "1";
 		}
 
-		return "1";
+		return "0" + fromNewBalance + " " + toNewBalance;
 
 	}
 
@@ -1429,8 +1430,31 @@ public class App implements Testable, BankTeller, Transaction
 		return;
 	}
 
+	private boolean isValid(Date date)
+	{
+		Calendar cal = Calendar.getInstance();
+		cal.setLenient(false);
+		cal.setTime(date);
+		try{
+			cal.getTime();
+		}catch (Exception e)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	@Override
 	public String setDate(int year, int month, int day) {
+		String panDuan = "";
+		String newone1 = ""+year+"-"+month+"-"+day;
+		Date test = Date.valueOf(newone1);
+		panDuan += year;
+		if(panDuan.length()!=4)
+			return  "1";
+		if(!isValid(test))
+			return "1";
 		if(systemDate == null)
 		{
 
@@ -1439,8 +1463,11 @@ public class App implements Testable, BankTeller, Transaction
 
 			updateDate();
 
+			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+			String format = formatter.format(systemDate);
 
-			return "0";
+
+			return "0 " + systemDate.toString();
 		}
 		else if(lastDay(systemDate))
 		{
@@ -1476,7 +1503,11 @@ public class App implements Testable, BankTeller, Transaction
 
 			updateDate();
 
-			return "0";
+			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-mm-dd");
+			String format = formatter.format(systemDate);
+
+
+			return "0 " + systemDate.toString();
 		}
 		else
 		{
@@ -1524,7 +1555,11 @@ public class App implements Testable, BankTeller, Transaction
 
 			updateDate();
 
-			return "0";
+			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-mm-dd");
+			String format = formatter.format(systemDate);
+
+
+			return "0 " + systemDate.toString();
 		}
 
 	}
