@@ -1841,7 +1841,7 @@ public class App implements Testable, BankTeller, Transaction
 
 			afterbalance = resultSet.getDouble("balance") - amount;
 
-			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'Transfer', ?, ? )"))
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'TRANSFER', ?, ? )"))
 			{
 				statement1.setDouble(1, amount);
 				statement1.setDate(2, systemDate);
@@ -1910,7 +1910,7 @@ public class App implements Testable, BankTeller, Transaction
 
 			afterbalance = resultSet.getDouble("balance") - amount*1.02;
 
-			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'Wire', ?, ? )"))
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'WIRES', ?, ? )"))
 			{
 				statement1.setDouble(1, amount);
 				statement1.setDate(2, systemDate);
@@ -2155,7 +2155,7 @@ public class App implements Testable, BankTeller, Transaction
 			}
 
 
-			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'Collect', ?, ? )"))
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, 'COLLECT', ?, ? )"))
 			{
 				statement1.setDouble(1, amount);
 				statement1.setDate(2, systemDate);
