@@ -5,25 +5,16 @@ import java.util.Calendar;
 import java.sql.Date;
 
 public interface Transaction {
-    ArrayList<Integer> daysOfMonty = new ArrayList<Integer>();
 
-    String Deposit();
+    String withDrawl(String accountID, double money);
 
-    String TopUp();
-
-    String withDrawl();
-
-    String Purchase();
-
-    String Transfer();
-
-    String Collect();
-
-    String payFriend();
-
-    String wireTrans();
-
-    String writeCheck();
-
-    String accrueInterest();
+    String purchase(String accountID, double money);
+    //
+//    String transfer();
+//
+    String collect(String accountID, double amount);
+    //
+//    String wireTrans();
+//
+    String writeCheck(String accountID, double amount);
 }

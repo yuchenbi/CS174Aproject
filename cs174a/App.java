@@ -1,12 +1,16 @@
 package cs174a;                                             // THE BASE PACKAGE FOR YOUR APP MUST BE THIS ONE.  But you may add subpackages.
 
 // You may have as many imports as you need.
+import java.math.BigInteger;
 import java.sql.*;
+import java.sql.Date;
 import java.text.DecimalFormat;
+import java.util.*;
 import java.util.Properties;
 
 import oracle.jdbc.pool.OracleDataSource;
 import oracle.jdbc.OracleConnection;
+import java.security.MessageDigest;
 import oracle.jdbc.proxy.annotation.Pre;
 
 import javax.swing.plaf.nimbus.State;
@@ -16,7 +20,7 @@ import java.util.ArrayList;
  * The most important class for your application.
  * DO NOT CHANGE ITS SIGNATURE.
  */
-public class App implements Testable
+public class App implements Testable, BankTeller, Transaction
 {
 	private OracleConnection _connection;                   // Example connection object to your DB.
 	private Date systemDate;
@@ -204,75 +208,264 @@ public class App implements Testable
 		return "0 "+ old + " " + newed;
 	}
 
-	@Override
-	public String dropTables()
-	{
 
 
-		ArrayList<String> needed = new ArrayList<String>();
 
-		needed.add("drop table relate");
-		needed.add("drop table transaction");
-		needed.add("drop table pocketaccount");
-		needed.add("drop table account");
-		needed.add("drop table belongs");
-		needed.add("drop table team");
-		needed.add("drop table customer");
+	public String transferCustomer(String accountId1, String accountId2, String tid, double amount) {
+		String selection = "select A.* from account A where A.accountid = ?";
+		double afterbalance = 0;
+		double accountbalance = 0;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection, ResultSet.TYPE_SCROLL_SENSITIVE,
+				ResultSet.CONCUR_UPDATABLE)) {
+			preparedStatement.setString(1, accountId1);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			resultSet.next();
 
-		try(Statement statement = _connection.createStatement())
-		{
-			for(String within: needed)
-			{
-				statement.execute(within);
+			if(accountId2.equals(accountId1)) {
+				throw new SQLException("Receiving account cannot be the same with current account");
 			}
 
-			return "0";
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement("select A.* from account A where A.accountid = ?")) {
+				preparedStatement1.setString(1, accountId2);
+				ResultSet resultSet2 = preparedStatement1.executeQuery();
+				if(!resultSet2.next()) {
+					throw new SQLException("Receiving account doesn't exist.");
+				} else if(resultSet2.getString("STATUS").equals("CLOSE")) {
+					throw new SQLException("Receiving account closed");
+				} else if(resultSet2.getString("TYPE").equals("POCKET")) {
+					throw new SQLException("Receiving account is pocket account");
+				}
+				String team = resultSet2.getString("owned");
+
+				try(PreparedStatement preparedStatement2 = _connection.prepareStatement("select B.* from belongs B where B.teamid = ? and B.taxid = ?")) {
+					preparedStatement2.setString(1, team);
+					preparedStatement2.setString(2, tid);
+					ResultSet resultSet3 = preparedStatement2.executeQuery();
+					if (!resultSet3.next()){
+						throw new SQLException("You are not a owner of the receiving account");
+					}
+				}
+			}
+
+//			if(resultSet.getString("type").equals("pocket")) {
+//				throw new SQLException("The account is a");
+//			}
+
+			if(resultSet.getDouble("balance") < amount)
+				throw new SQLException("Account balance too low for transfer");
+
+			if(resultSet.getString("STATUS").equals("CLOSE")) {
+				throw new SQLException("The account is closed.");
+			}
+
+			resultSet.updateDouble("BALANCE", resultSet.getDouble("BALANCE") - amount);
+			resultSet.updateRow();
+
+			try(PreparedStatement preparedStatement3 = _connection.prepareStatement("select A.* from account A where A.accountid = ?", ResultSet.TYPE_SCROLL_SENSITIVE,
+					ResultSet.CONCUR_UPDATABLE)) {
+				preparedStatement3.setString(1, accountId2);
+				ResultSet resultSet2 = preparedStatement3.executeQuery();
+				resultSet2.next();
+				resultSet2.updateDouble("BALANCE", resultSet2.getDouble("BALANCE") + amount);
+				resultSet2.updateRow();
+			}
+
+			if(resultSet.getDouble("balance") - amount <= 0.01)
+				resultSet.updateString("STATUS", "CLOSE");
+
+			afterbalance = resultSet.getDouble("balance") - amount;
+
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'Transfer', ?, ? )"))
+			{
+				statement1.setDouble(1, amount);
+				statement1.setDouble(2, afterbalance);
+				statement1.setDate(3, systemDate);
+				statement1.setString(4, accountId1);
+				statement1.setString(5, accountId2);
+				statement1.execute();
+			}
+		} catch (SQLException e) {
+			System.err.println(e.getMessage());
+			return "1";
 		}
-		catch(SQLException e)
+		return "0";
+	}
+
+
+
+
+
+
+
+
+	public String wire(String accountId1, String accountId2, double amount) {
+		String selection = "select A.* from account A where A.accountid = ?";
+		double afterbalance = 0;
+		double accountbalance = 0;
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection, ResultSet.TYPE_SCROLL_SENSITIVE,
+				ResultSet.CONCUR_UPDATABLE)) {
+			preparedStatement.setString(1, accountId1);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			resultSet.next();
+
+			if(accountId2.equals(accountId1)) {
+				throw new SQLException("Receiving account cannot be the same with current account");
+			}
+
+			try(PreparedStatement preparedStatement1 = _connection.prepareStatement("select A.* from account A where A.accountid = ?")) {
+				preparedStatement1.setString(1, accountId2);
+				ResultSet resultSet2 = preparedStatement1.executeQuery();
+				if(!resultSet2.next()) {
+					throw new SQLException("Receiving account doesn't exist.");
+				} else if(resultSet2.getString("STATUS").equals("CLOSE")) {
+					throw new SQLException("Receiving account closed");
+				} else if(resultSet2.getString("TYPE").equals("POCKET")) {
+					throw new SQLException("Receiving account is pocket account");
+				}
+			}
+
+//			if(resultSet.getString("type").equals("pocket")) {
+//				throw new SQLException("The account is a");
+//			}
+
+			if(resultSet.getDouble("balance") < amount*1.02)
+				throw new SQLException("Account balance too low for transfer");
+
+			if(resultSet.getString("STATUS").equals("CLOSE")) {
+				throw new SQLException("The account is closed.");
+			}
+
+			resultSet.updateDouble("BALANCE", resultSet.getDouble("BALANCE") - amount*1.02);
+			resultSet.updateRow();
+
+			try(PreparedStatement preparedStatement3 = _connection.prepareStatement("select A.* from account A where A.accountid = ?", ResultSet.TYPE_SCROLL_SENSITIVE,
+					ResultSet.CONCUR_UPDATABLE)) {
+				preparedStatement3.setString(1, accountId2);
+				ResultSet resultSet2 = preparedStatement3.executeQuery();
+				resultSet2.next();
+				resultSet2.updateDouble("BALANCE", resultSet2.getDouble("BALANCE") + amount);
+				resultSet2.updateRow();
+			}
+
+			if(resultSet.getDouble("balance") - amount*1.02 <= 0.01)
+				resultSet.updateString("STATUS", "CLOSE");
+
+			afterbalance = resultSet.getDouble("balance") - amount*1.02;
+
+			try(PreparedStatement statement1 = _connection.prepareStatement("insert into transaction values(null, ?, ?, ?, 'Wire', ?, ? )"))
+			{
+				statement1.setDouble(1, amount);
+				statement1.setDouble(2, afterbalance);
+				statement1.setDate(3, systemDate);
+				statement1.setString(4, accountId1);
+				statement1.setString(5, accountId2);
+				statement1.execute();
+			}
+		} catch (SQLException e) {
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return "0";
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//	@Override
+	public String withDrawl(String accountID, double money) {
+		String subtraction = "select * from Account A where A.type <> 'POCKET' and A.accountid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(subtraction,ResultSet.TYPE_SCROLL_SENSITIVE,
+				ResultSet.CONCUR_UPDATABLE))
+		{
+			preparedStatement.setString(1, accountID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("No such account for withDrawl");
+
+
+
+			if(resultSet.getDouble("balance") < money)
+				throw new SQLException("Account balance too low for withDrawl");
+
+			if(resultSet.getDouble("balance") - money <= 0.01)
+				resultSet.updateString("STATUS", "CLOSE");
+
+			resultSet.updateDouble("balance", resultSet.getDouble("balance") - money);
+			resultSet.updateRow();
+		}
+		catch (SQLException e)
 		{
 			System.err.println(e.getMessage());
 			return "1";
 		}
-//		PreparedStatement seeAll = null;
-//		PreparedStatement dropAll = null;
-//		String allNames = "select table_name from all_tables where owner = ?";
-//		String dropThe = "drop table ";
-//		try
-//		{
-//
-//			seeAll = _connection.prepareStatement(allNames);
-//			seeAll.setString(1, _connection.getUserName());
-//		}
-//		catch(SQLException e)
-//		{
-//			System.err.println(e.getMessage());
-//			return "1";
-//		}
-//
-//		try(ResultSet resultSet = seeAll.executeQuery())
-//		{
-//
-//			while(resultSet.next())
-//			{
-//				needed.add(resultSet.getString(1));
-//			}
-//			for(String within:needed)
-//			{
-//				String temp = dropThe;
-//				temp += within;
-//				dropAll = _connection.prepareStatement(temp);
-//				dropAll.execute();
-//			}
-//		}
-//		catch(SQLException e)
-//		{
-//			System.err.println(e.getMessage());
-//			return "1";
-//		}
-//
+
+		String transac = "insert into transaction values(null, ?, ? , 'WITHDRAWL', ?, null)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(transac))
+		{
+			preparedStatement.setDouble(1, money);
+			preparedStatement.setDate(2, systemDate);
+			preparedStatement.setString(3, accountID);
+			preparedStatement.execute();
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		return "0";
 	}
 
-	@Override
+
+
+
+
+
+
+
+//	@Override
+public String dropTables()
+{
+
+
+	ArrayList<String> needed = new ArrayList<String>();
+//	needed.add("drop table datebalance");
+	needed.add("drop table relate");
+	needed.add("drop table transaction");
+	needed.add("drop table pocketaccount");
+	needed.add("drop table account");
+	needed.add("drop table belongs");
+	needed.add("drop table team");
+	needed.add("drop table customer");
+
+
+	try(Statement statement = _connection.createStatement())
+	{
+		for(String within: needed)
+		{
+			statement.execute(within);
+		}
+
+		return "0";
+	}
+	catch(SQLException e)
+	{
+		System.err.println(e.getMessage());
+		return "1";
+	}
+
+}
+
 	public String createTables()
 	{
 		ArrayList<String> needed = new ArrayList<String>();
@@ -280,7 +473,7 @@ public class App implements Testable
 		needed.add("create table customer(" +
 				"taxid varchar2(20)," +
 				"name varchar2(20)," +
-				"pin varchar(40)," +
+				"pin char(40)," +
 				"address varchar2(20)," +
 				"primary key (taxid))");
 		needed.add("create table team(" +
@@ -292,13 +485,13 @@ public class App implements Testable
 				"teamid number," +
 				"taxid varchar2(20)," +
 				"primary key (teamid, taxid)," +
-				"foreign key (teamid) references team," +
-				"foreign key (taxid) references customer)");
+				"foreign key (teamid) references team on delete cascade," +
+				"foreign key (taxid) references customer on delete cascade)");
 		needed.add("create table account(" +
 				"accountid varchar2(20)," +
 				"type varchar2(20)," +
 				"status varchar2(10)," +
-				"interest number(38,2)," +
+				"interest number(38,5)," +
 				"balance number(38,2)," +
 				"bankband varchar2(20)," +
 				"owned number not null," +
@@ -309,25 +502,49 @@ public class App implements Testable
 				"accountid varchar2(20)," +
 				"linkedid varchar2(20) not null," +
 				"primary key (accountid)," +
-				"foreign key (accountid) references account," +
+				"foreign key (accountid) references account on delete cascade," +
 				"foreign key (linkedid) references account(accountid))");
 		needed.add("create table transaction(" +
 				"transid number generated by default on null as identity," +
 				"amount number(38,2)," +
-				"afterbalance number(38,2)," +
 				"transdate date," +
 				"type varchar2(20)," +
-				"clientfrom varchar2(20) not null," +
-				"clientto varchar2(20) not null," +
+				"clientfrom varchar2(20)," +
+				"clientto varchar2(20)," +
 				"primary key (transid)," +
-				"foreign key (clientfrom) references account(accountid)," +
-				"foreign key (clientto) references account(accountid))");
+				"foreign key (clientfrom) references account(accountid) on delete set null," +
+				"foreign key (clientto) references account(accountid) on delete set null)");
 		needed.add("create table relate(" +
 				"accountid varchar2(20)," +
 				"transid number," +
 				"primary key (accountid, transid)," +
 				"foreign key (accountid) references account," +
 				"foreign key (transid) references transaction)");
+		needed.add("create table datebalance(" +
+				"accountid varchar(20)," +
+				"balancedate date," +
+				"balance number(38,2)," +
+				"difference number," +
+				"interest number(38,2)," +
+				"primary key (accountid, balancedate)," +
+				"foreign key (accountid) references Account on delete cascade)");
+//		needed.add("create table interest(\n" +
+//				"    somekey number generated by default on null as identity,\n" +
+//				"    accrueDate Date" +
+//				")");
+//		needed.add("CREATE OR REPLACE TRIGGER TRIGGER1 \n" +
+//				"AFTER UPDATE OF BALANCE ON ACCOUNT\n" +
+//				"BEGIN\n" +
+//				"  UPDATE Account A\n" +
+//				"  set A.STATUS = 'CLOSE'\n" +
+//				"  WHERE A.BALANCE<=0.01;\n" +
+//				"END;");
+//		needed.add("CREATE OR REPLACE TRIGGER TRIGGER1 \n" +
+//				"AFTER UPDATE OF STATUS ON ACCOUNT \n" +
+//				"BEGIN\n" +
+//				"  UPDATE Account A\n" +
+//				"  set A.STATUS = 'CLOSE'\n" +
+//				"END;");
 //		needed.add("create or replace TRIGGER \"CLOSELOWACCOUNT\" BEFORE UPDATE OF BALANCE ON ACCOUNT \n" +
 //				"REFERENCING NEW AS NEWTABLE \n" +
 //				"BEGIN\n" +
@@ -335,8 +552,7 @@ public class App implements Testable
 //				"  set A.status = 'CLOSED'\n" +
 //				"  where A.balance = 0;\n" +
 //				"END;");
-//		needed.add("create or replace TRIGGER \"CLEAREMPTYTEAM\" BEFORE DELETE ON ACCOUNT \n" +
-//				"REFERENCING OLD AS OLDONE NEW AS NEWONE \n" +
+//		needed.add("create or replace TRIGGER \"CLEAREMPTYTEAM\" AFTER DELETE ON ACCOUNT \n" +
 //				"BEGIN\n" +
 //				"  DELETE\n" +
 //				"  FROM BELONGS B\n" +
@@ -437,7 +653,7 @@ public class App implements Testable
 			statement1.setString(5, accountId2);
 			statement1.execute();
 		}
-		
+
 	}catch (SQLException e) {
 		System.err.println(e.getMessage());
 		return "1";
@@ -850,169 +1066,15 @@ public class App implements Testable
 		}
 	}
 
-	@Override
-	public String showBalance(String accountId) {
-		String que = "select A.balance from Account A where A.accountid = ?";
-		try(PreparedStatement seeBalance = _connection.prepareStatement(que))
-		{
-			seeBalance.setString(1, accountId);
-			ResultSet resultSet = seeBalance.executeQuery();
-			if(!resultSet.next())
-				throw new SQLException("No such account");
-
-			double store = resultSet.getDouble(1);
-			DecimalFormat df = new DecimalFormat("#.##");
-			System.out.println("Account "+accountId + " Balance" + df.format(store));
-			return "0";
-		}
-		catch(SQLException e)
-		{
-			System.err.println(e.getMessage());
-			return "1";
-		}
-
-	}
-
-	private String addToTeam(int teamId, String taxid)
-	{
-		String exists = "select B.* from Belongs B where B.teamid = ? and B.taxid = ?";
-		try(PreparedStatement preparedStatement = _connection.prepareStatement(exists))
-		{
-			preparedStatement.setInt(1, teamId);
-			preparedStatement.setString(2, taxid);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			if(resultSet.next())
-			{
-				throw new SQLException("Already exists in team");
-			}
-		}catch(SQLException e)
-		{
-			System.err.println(e.getMessage());
-			return "1";
-		}
 
 
-		String select = "select B.* from Belongs B where B.teamid = ?";
-		try(PreparedStatement preparedStatement = _connection.prepareStatement(select))
-		{
-			preparedStatement.setInt(1, teamId);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			if(resultSet.next())
-			{
-				String insert = "insert into Belongs values(?,?)";
-				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insert))
-				{
-					preparedStatement1.setInt(1, teamId);
-					preparedStatement1.setString(2, taxid);
-					preparedStatement1.execute();
-				}
-			}
-			else
-			{
-				String addteam = "insert into Team values(null, ?)";
-				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(addteam))
-				{
-					preparedStatement1.setString(1, taxid);
-				}
-			}
-		}
-		catch (SQLException e)
-		{
-			System.err.println(e.getMessage());
-			return "1";
-		}
-		return "0";
-	}
 
 
-	private void simplyCustomer(String tin, String name, String address)
-	{
-
-		String createCus = "insert into Customer values(?,?,'1717',?)";
-		try (PreparedStatement preparedStatement = _connection.prepareStatement(createCus)) {
-			preparedStatement.setString(1, tin);
-			preparedStatement.setString(2, name);
-			preparedStatement.setString(3, address);
-			preparedStatement.execute();
-		}
-		catch(SQLException e)
-		{
-			System.err.println(e.getMessage());
-		}
-
-	}
-
-	@Override
-	public String createCustomer(String accountId, String tin, String name, String address) {
-		String selection = "select A.* from Account A where A.accountid = ?";
-		try(PreparedStatement count = _connection.prepareStatement(selection))
-		{
-			count.setString(1, accountId);
-			ResultSet resultSet = count.executeQuery();
-			if(!resultSet.next())
-				throw new SQLException("Not an existing account");
-
-			simplyCustomer(tin, name, address);
-
-
-			String addTeam = "insert into team belongs(?,?)";
-			int team = resultSet.getInt("owned");
-			try(PreparedStatement preparedStatement = _connection.prepareStatement(addTeam))
-			{
-				preparedStatement.setInt(1, team);
-				preparedStatement.setString(2, tin);
-				preparedStatement.execute();
-			}
-//
-//			selection = "select count(*) from Customer C where C.tin = ?";
-//			try(PreparedStatement count2 = _connection.prepareStatement(selection))
-//			{
-//				count2.setString(1, tin);
-//				resultSet = count2.executeQuery();
-//				if(resultSet.getInt(1) > 0)
-//					return "1";
-//			}
-
-		}catch (SQLException e)
-		{
-			System.err.println(e.getMessage());
-			return "1";
-		}
-
-
-		return "0";
-	}
 
 	/**
 	 * Example of one of the testable functions.
 	 */
-	@Override
-	public String listClosedAccounts()
-	{
 
-		String find = "select A.accountid from Account A where A.status = 'CLOSE'";
-		StringBuilder result = new StringBuilder();
-		try(Statement statement = _connection.createStatement())
-		{
-			ResultSet resultSet = statement.executeQuery(find);
-			result.append(0).append(" ");
-			while(resultSet.next())
-			{
-				result.append(resultSet.getString(1)).append(" ");
-			}
-		}
-		catch(SQLException e)
-		{
-			System.err.println(e.getMessage());
-			result = new StringBuilder("1");
-		}
-
-		return result.toString();
-	}
-
-	/**
-	 * Another example.
-	 */
 
 
 
@@ -1048,6 +1110,7 @@ public class App implements Testable
 		}
 		catch(SQLException e)
 		{
+			System.err.println("1");
 			System.err.println(e.getMessage());
 			return "1";
 		}
@@ -1127,6 +1190,7 @@ public class App implements Testable
 		}
 		catch(SQLException e)
 		{
+			System.err.println("2");
 			System.err.println(e.getMessage());
 			return "1";
 		}
@@ -1139,4 +1203,995 @@ public class App implements Testable
 
 		return "0 " + id + " " + accountType + " " + initialBalance + " " + tin;
 	}
+
+
+
+
+
+
+
+
+	public String createCheckingSavingsAccountWithBranch( AccountType accountType, String id, double initialBalance, String tin, String name, String address, String branch)
+	{
+		String type = null;
+		if(accountType == AccountType.SAVINGS)
+			type = "SAVING";
+		else if(accountType == AccountType.INTEREST_CHECKING)
+			type = "INTEREST";
+		else if(accountType == AccountType.STUDENT_CHECKING)
+			type = "STUDENT";
+		else
+			return "1";
+
+		if(initialBalance < 1000)
+			return "1";
+
+
+		String existing = "select C.* from Customer C where C.taxid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
+		{
+			preparedStatement.setString(1, tin);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				simplyCustomer(tin, name, address);
+
+
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		existing = "select * from Account A where A.accountid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
+		{
+			preparedStatement.setString(1, id);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				String insertion = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setString(1, resultSet.getString("owned"));
+					preparedStatement1.setString(2, tin);
+					preparedStatement1.execute();
+				}
+
+			}
+			else
+			{
+				String insertion = "insert into Team values(null,?)";
+				int autoGen = 0;
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion,new String[]{"teamid"}))
+				{
+					preparedStatement1.setString(1, tin);
+					int res = preparedStatement1.executeUpdate();
+					if(res == 0)
+						throw new SQLException("something weird");
+					ResultSet resultSet1 = preparedStatement1.getGeneratedKeys();
+					if(resultSet1.next())
+						autoGen = resultSet1.getInt(1);
+					else
+						throw new SQLException("Insertion into Team failed");
+
+
+
+				}
+				insertion = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setInt(1, autoGen);
+					preparedStatement1.setString(2, tin);
+					preparedStatement1.execute();
+				}
+
+				insertion = "insert into Account values(?,?,'OPEN',?, ?,?, ?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setString(1, id);
+					preparedStatement1.setString(2, type);
+					double interest = 0;
+					if(type.equals("SAVING"))
+						interest = 0.048/12;
+					else if(type.equals("INTEREST"))
+						interest = 0.03/12;
+					else
+						interest = 0;
+					preparedStatement1.setDouble(3, interest);
+					preparedStatement1.setDouble(4, initialBalance);
+					preparedStatement1.setString(5, branch);
+					preparedStatement1.setInt(6,autoGen);
+					preparedStatement1.execute();
+				}
+				insertion = "insert into Transaction values(null, ?,?,?,'DEPOSIT',?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insertion))
+				{
+					preparedStatement1.setDouble(1, initialBalance);
+					preparedStatement1.setDouble(2, initialBalance);
+					preparedStatement1.setDate(3, systemDate);
+					preparedStatement1.setString(4, id);
+					preparedStatement1.setString(5, id);
+					preparedStatement1.execute();
+				}
+			}
+
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+
+
+
+
+
+		return "0 " + id + " " + accountType + " " + initialBalance + " " + tin;
+	}
+
+
+
+
+
+
+
+
+
+//	@Override
+	public String deleteAllClosed() {
+
+
+		String deletion = "delete from Account A where A.type = 'POCKET' and A.accountid in (Select P.accountid from Pocketaccount P where P.linkedid in (select A2.accountid from Account A2 where A2.STATUS='CLOSE'))";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		deletion = "delete from Account A where A.status = 'CLOSE'";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		deletion = "delete from belongs B where B.teamid not in (select A.owned from account a)";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		deletion = "delete from team T where T.teamid not in (select B.teamid from Belongs B)";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		deletion = "delete from Customer C where C.taxid not in (select B.taxid from Belongs B)";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		return "0";
+	}
+
+
+
+
+
+
+
+//	@Override
+	public String DTER() {
+		StringBuilder result = new StringBuilder();
+		String summation = "select taxid\n" +
+				"from (with t as \n" +
+				"(select A2.accountid, sum(T.amount) as amount\n" +
+				"from Account A2, Transaction T \n" +
+				"where (T.clientto = A2.accountid) and (T.type = 'DEPOSIT' or T.type = 'TRANSFER' or T.type = 'WIRES')\n" +
+				"group by A2.accountid)\n" +
+				"select C.taxid, sum(t.amount) as indi\n" +
+				"From Customer C, Team T, t, Account A\n" +
+				"where C.taxid in (select B2.taxid from Belongs B2 where B2.teamid = T.teamid) and T.teamid = A.owned and A.accountid = t.accountid\n" +
+				"group by C.taxid)\n" +
+				"where indi > 100";
+		try(Statement statement = _connection.createStatement())
+		{
+			ResultSet resultSet = statement.executeQuery(summation);
+			while(resultSet.next())
+			{
+
+				result.append(resultSet.getString(1)).append(" ").append(System.lineSeparator());
+			}
+
+			return result.toString();
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+	}
+
+
+
+
+
+//	@Override
+	public String cusReport(String taxId) {
+		StringBuilder result = new StringBuilder();
+		String selection = "select A.* from Account A where A.owned in (select B.teamid from Belongs B where B.taxid = ?) ";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection))
+		{
+			preparedStatement.setString(1, taxId);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			result.append("Customer report for user ").append(taxId).append(System.lineSeparator());
+
+			while(resultSet.next())
+				result.append(resultSet.getString(1)).append(" ").append(resultSet.getString(2)).append(" ").append(resultSet.getString(3)).append(" ").append(resultSet.getDouble(4)).append(" ").append(resultSet.getDouble(5)).append(System.lineSeparator());
+
+			return result.toString();
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+	}
+
+//	@Override
+public String checkTransaction(String accountID) {
+	StringBuilder res = new StringBuilder();
+	String selection = "select * from Transaction T where T.clientfrom = ? or T.clientto = ?";
+	try(PreparedStatement preparedStatement = _connection.prepareStatement(selection))
+	{
+		preparedStatement.setString(1, accountID);
+		preparedStatement.setString(2, accountID);
+		ResultSet resultSet = preparedStatement.executeQuery();
+		res.append("Transactions for account ").append(accountID).append(System.lineSeparator());
+		while(resultSet.next())
+			res.append(resultSet.getInt(1)).append(" ").append(resultSet.getDouble(2)).append(" ").append(resultSet.getDate(3)).append(System.lineSeparator());
+
+		return res.toString();
+	}
+	catch (SQLException e)
+	{
+		System.err.println(e.getMessage());
+		return "1";
+	}
 }
+
+
+//	public String accrueInterest()
+
+	public String setInterest(String accountID, double NewInterest)
+	{
+		String selection = "select A.* from account A where A.accountid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection, ResultSet.TYPE_SCROLL_SENSITIVE,
+				ResultSet.CONCUR_UPDATABLE))
+		{
+			preparedStatement.setString(1, accountID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			if(!resultSet.next())
+				throw new SQLException("No specified account");
+
+			resultSet.updateDouble("interest", NewInterest);
+			resultSet.updateRow();
+
+			return "0";
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+	}
+
+//	@Override
+	public String addInterest() {
+		if(systemDate == null)
+		{
+			System.err.println("System Date not set");
+			return "1";
+		}
+		if(!lastDay(systemDate))
+		{
+			System.err.println("Not last day, can't add interest");
+		}
+
+		String exist = "select max(T.transdate) from transaction T where T.type = 'ACCRUE'";
+		try(Statement statement = _connection.createStatement())
+		{
+			ResultSet resultSet = statement.executeQuery(exist);
+			resultSet.next();
+
+			if(resultSet.getDate(1) != null)
+				if(resultSet.getDate(1).compareTo(systemDate) == 0)
+					throw new SQLException("Can't add interest again in this month");
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		String update = "update Account A\n" +
+				"set A.balance = A.balance + (select updated from (select D.accountid, sum(d.DIFFERENCE * D.balance * D.interest/12/?) as updated from datebalance D group by D.accountid) where accountid = A.accountid)\n" +
+				"where A.ACCOUNTID in (select D.accountid from datebalance D)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(update))
+		{
+			preparedStatement.setInt(1, maxDayMonth(systemDate));
+			preparedStatement.execute();
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		String transactions = "insert into transaction select null, sum(d.DIFFERENCE * D.balance * D.interest/?), ?, 'ACCRUE', null, D.accountid  from datebalance D group by D.accountid";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(transactions))
+		{
+			preparedStatement.setInt(1, maxDayMonth(systemDate));
+			preparedStatement.setDate(2, systemDate);
+			preparedStatement.execute();
+		}catch (SQLException e)
+		{
+			System.out.println(e.getMessage());
+			return "1";
+		}
+
+		return "0";
+	}
+
+
+
+
+
+//	@Override
+	public String generateMonthlyReport(String taxID) {
+		String result = "";
+		ArrayList<String> accounts = new ArrayList<String>();
+		String existing = "select C.* from Customer C where C.taxid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(existing))
+		{
+			preparedStatement.setString(1, taxID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			if(!resultSet.next())
+				throw new SQLException("Can't find specified taxID");
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		String selectAccounts = "select A.accountid from Account A where A.owned in (select B.teamid from Belongs B where B.taxid = ?)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selectAccounts))
+		{
+			preparedStatement.setString(1, taxID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			while(resultSet.next())
+				accounts.add(resultSet.getString("accountid"));
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		String warning = "select sum(A.balance) as balance from Account A where A.owned in (select T.teamid from Team T where T.primary = ?)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(warning))
+		{
+			preparedStatement.setString(1, taxID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			resultSet.next();
+
+			if(resultSet.getDouble(1) > 100000)
+				result += "Warning: Account balance exceeds insurance limit" + System.lineSeparator();
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		for(String within: accounts)
+		{
+			result += "Account " + within + ": ";
+			String balances = "select D.balance from dateBalance D where D.balancedate = (select min(D2.balanceDate) from Datebalance D2) and D.accountID = ?";
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(balances))
+			{
+				preparedStatement.setString(1, taxID);
+				ResultSet resultSet = preparedStatement.executeQuery();
+
+				if(resultSet.next())
+					result += "Initial balance: " + resultSet.getDouble("balance");
+			} catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			balances = "select A.balance from Account A where A.accountid = ?";
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(balances))
+			{
+				preparedStatement.setString(1, within);
+				ResultSet resultSet = preparedStatement.executeQuery();
+
+				resultSet.next();
+
+				result += " Final Balance: ";
+				result += resultSet.getDouble("balance");
+			} catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+			String owners = "select C.name, C.address from Customer C where C.taxid in (select B.taxid from Belongs B where B.teamid = (select A.owned from Account A where A.accountid = ?))";
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(owners))
+			{
+				preparedStatement.setString(1, within);
+				ResultSet resultSet = preparedStatement.executeQuery();
+
+				result += System.lineSeparator();
+				result += "Owners: ";
+
+				while(resultSet.next())
+					result += "Name: " + resultSet.getString("name") + " Address: " + resultSet.getString("address") + System.lineSeparator();
+			} catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+			String transactions = "select t.* from transaction T where T.clientfrom = ? or T.clientto = ?";
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(transactions))
+			{
+				preparedStatement.setString(1, within);
+				preparedStatement.setString(2, within);
+				ResultSet resultSet = preparedStatement.executeQuery();
+
+				result += System.lineSeparator();
+
+				result += "Transactions for " + within + ":" + System.lineSeparator();
+
+				while(resultSet.next())
+				{
+					result += resultSet.getString("TYPE") + " " + resultSet.getDouble("amount") + " " + resultSet.getDate("transdate") + " " + resultSet.getString("clientto") + System.lineSeparator();
+				}
+			}catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			result += System.lineSeparator();
+		}
+
+		return result;
+
+//		String selection = "with t as (select A.accountid from Account A where A.owned in (select B.teamid from Belongs B where B.taxid = ?)" +
+//				" select * from transaction T, t where T.clientto in t or T.clientfrom in t";
+//		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection))
+//		{
+//			preparedStatement.setString(1, taxID);
+//			ResultSet resultSet = preparedStatement.executeQuery();
+//			result += "Transactions : " + System.lineSeparator();
+//
+//			while(resultSet.next())
+//			{
+//				result +=
+//			}
+//		}
+//		catch(SQLException e)
+//		{
+//			System.err.println(e.getMessage());
+//			return "1";
+//		}
+	}
+
+
+
+
+
+
+
+
+	public String encrypt(String password)
+	{
+
+		String hashText = null;
+		try{
+			MessageDigest md = MessageDigest.getInstance("SHA-1");
+
+			byte[] messageDigest = md.digest(password.getBytes());
+
+			BigInteger no = new BigInteger(1, messageDigest);
+
+			hashText = no.toString(16);
+
+			while(hashText.length() < 40)
+				hashText = "0" + hashText;
+
+
+		}catch (Exception e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return hashText;
+	}
+
+
+
+
+
+	@Override
+	public String showBalance(String accountId) {
+		String que = "select A.balance from Account A where A.accountid = ?";
+		try(PreparedStatement seeBalance = _connection.prepareStatement(que))
+		{
+			seeBalance.setString(1, accountId);
+			ResultSet resultSet = seeBalance.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("No such account");
+
+			double store = resultSet.getDouble(1);
+			DecimalFormat df = new DecimalFormat("#.##");
+			return "0 " + df.format(store);
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+	}
+
+	@Override
+	public String deleteAllTrans() {
+		String deletion = "delete from transaction";
+		try(Statement statement = _connection.createStatement())
+		{
+			statement.executeUpdate(deletion);
+			return "0";
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+	}
+
+	private String addToTeam(int teamId, String taxid)
+	{
+		String exists = "select B.* from Belongs B where B.teamid = ? and B.taxid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(exists))
+		{
+			preparedStatement.setInt(1, teamId);
+			preparedStatement.setString(2, taxid);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				throw new SQLException("Already exists in team");
+			}
+		}catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		String select = "select B.* from Belongs B where B.teamid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(select))
+		{
+			preparedStatement.setInt(1, teamId);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(resultSet.next())
+			{
+				String insert = "insert into Belongs values(?,?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(insert))
+				{
+					preparedStatement1.setInt(1, teamId);
+					preparedStatement1.setString(2, taxid);
+					preparedStatement1.execute();
+				}
+			}
+			else
+			{
+				String addteam = "insert into Team values(null, ?)";
+				try(PreparedStatement preparedStatement1 = _connection.prepareStatement(addteam))
+				{
+					preparedStatement1.setString(1, taxid);
+				}
+			}
+		}
+		catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+		return "0";
+	}
+
+	private boolean allNumbers(String input)
+	{
+		try{
+			Integer.parseInt(input);
+			return true;
+		}catch (NumberFormatException e)
+		{
+			return false;
+		}
+	}
+
+	public void setPIN(String taxID, String oldPIN, String newPIN)
+	{
+		if(newPIN.length()!=4)
+		{
+			System.err.println("New PIN has incorrect length");
+			return;
+		}
+		else if(!allNumbers(newPIN))
+		{
+			System.err.println("New PIN contains not only digits");
+		}
+		if(verifyPIN(taxID, oldPIN))
+		{
+			String setting = "update Customer C set C.PIN = ? where C.taxid = ?";
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(setting))
+			{
+				preparedStatement.setString(1, encrypt(newPIN));
+				preparedStatement.setString(2, taxID);
+				preparedStatement.execute();
+			} catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return;
+			}
+		}
+	}
+
+	public boolean verifyPIN(String taxID, String PIN)
+	{
+		String encrypted = encrypt(PIN);
+		String selection = "select C.PIN from customer C where C.taxID = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(selection))
+		{
+			preparedStatement.setString(1, taxID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("No Account specified by accountID, verifyPIN failed");
+
+			if(!resultSet.getString("PIN").equals(encrypted))
+				return false;
+
+
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return false;
+		}
+
+		return true;
+	}
+
+
+	private void simplyCustomer(String tin, String name, String address) throws SQLException
+	{
+
+		String createCus = "insert into Customer values(?,?,?,?)";
+		try (PreparedStatement preparedStatement = _connection.prepareStatement(createCus)) {
+			preparedStatement.setString(1, tin);
+			preparedStatement.setString(2, name);
+			preparedStatement.setString(3, encrypt("1717"));
+			preparedStatement.setString(4, address);
+			preparedStatement.execute();
+		}
+
+	}
+
+
+
+
+
+
+
+
+//	@Override
+	public String writeCheck(String accountID, double amount) {
+		String update = "select A from Account A where A.accountid = ?";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(update,ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_UPDATABLE))
+		{
+			preparedStatement.setString(1, accountID);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			if(!resultSet.next())
+				throw new SQLException("No account as specified in writeCheck");
+
+			if(resultSet.getString("type").equals("POCKET"))
+				throw new SQLException("Can't write check on pocket account");
+
+			if(resultSet.getString("status").equals("CLOSE"))
+				throw new SQLException("Can't write check on closed account");
+
+			if(resultSet.getDouble("balance") < amount)
+				throw new SQLException("Account balance not enough");
+
+			if(resultSet.getDouble("balance") - amount <= 0.01)
+				resultSet.updateString("status", "CLOSE");
+
+			resultSet.updateDouble("balance", resultSet.getDouble("balance") - amount);
+			resultSet.updateRow();
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+		String insertion = "insert into transaction values(null, ?, ?, 'CHECK', ?,null)";
+		try(PreparedStatement preparedStatement = _connection.prepareStatement(insertion, new String[]{"TRANSID"}))
+		{
+			preparedStatement.setDouble(1, amount);
+			preparedStatement.setDate(2, systemDate);
+			preparedStatement.setString(3, accountID);
+			preparedStatement.execute();
+
+			ResultSet resultSet = preparedStatement.getGeneratedKeys();
+
+			return "Check Number: " + resultSet.getInt(1);
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+	}
+
+	public int getDay(Date date)
+	{
+		if(date == null)
+			return 0;
+
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(date);
+		return cal.get(Calendar.DAY_OF_MONTH) + 1;
+	}
+
+	public int getMonth(Date date)
+	{
+		if(date == null)
+			return 0;
+
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(date);
+		return cal.get(Calendar.MONTH) + 1;
+	}
+
+//	@Override
+	public String createCustomer(String accountId, String tin, String name, String address) {
+		String selection = "select A.* from Account A where A.accountid = ?";
+		try(PreparedStatement count = _connection.prepareStatement(selection))
+		{
+			count.setString(1, accountId);
+			ResultSet resultSet = count.executeQuery();
+			if(!resultSet.next())
+				throw new SQLException("Not an existing account");
+
+			simplyCustomer(tin, name, address);
+
+
+			String addTeam = "insert into belongs values(?,?)";
+			int team = resultSet.getInt("owned");
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(addTeam))
+			{
+				preparedStatement.setInt(1, team);
+				preparedStatement.setString(2, tin);
+				preparedStatement.execute();
+			}
+//
+//			selection = "select count(*) from Customer C where C.tin = ?";
+//			try(PreparedStatement count2 = _connection.prepareStatement(selection))
+//			{
+//				count2.setString(1, tin);
+//				resultSet = count2.executeQuery();
+//				if(resultSet.getInt(1) > 0)
+//					return "1";
+//			}
+
+		}catch (SQLException e)
+		{
+			System.err.println(e.getMessage());
+			return "1";
+		}
+
+
+		return "0";
+	}
+
+	/**
+	 * Example of one of the testable functions.
+	 */
+//	@Override
+	public String listClosedAccounts()
+	{
+
+		String find = "select A.accountid from Account A where A.status = 'CLOSE'";
+		StringBuilder result = new StringBuilder();
+		try(Statement statement = _connection.createStatement())
+		{
+			ResultSet resultSet = statement.executeQuery(find);
+			result.append(0).append(" ");
+			while(resultSet.next())
+			{
+				result.append(resultSet.getString(1)).append(" ");
+			}
+		}
+		catch(SQLException e)
+		{
+			System.err.println(e.getMessage());
+			result = new StringBuilder("1");
+		}
+
+		return result.toString();
+	}
+
+//	@Override
+	public String setDate(int year, int month, int day) {
+		if(systemDate == null)
+		{
+
+			String date = "" + year + "-" + month + "-" + day;
+			systemDate = Date.valueOf(date);
+
+
+			return "0";
+		}
+		else if(lastDay(systemDate))
+		{
+
+			String date = "" + year + "-" + month + "-" + day;
+			systemDate = Date.valueOf(date);
+
+			String deletion = "delete from datebalance";
+			try(Statement statement = _connection.createStatement())
+			{
+				statement.executeUpdate(deletion);
+			}catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			String updateBDate = "insert into datebalance\n" +
+					"select A.accountid, ? , A.balance, ?, A.interest\n" +
+					"from account a where a.interest <> 0";
+
+
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(updateBDate))
+			{
+				preparedStatement.setDate(1, systemDate);
+				preparedStatement.setInt(2, getDay(systemDate));
+				preparedStatement.execute();
+			}catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			return "0";
+		}
+		else
+		{
+			String selection = "select max(D.balancedate) from datebalance D";
+
+			try(Statement statement = _connection.createStatement())
+			{
+				ResultSet resultSet = statement.executeQuery(selection);
+				resultSet.next();
+				Date newone = resultSet.getDate(1);
+
+				if(newone != null && newone.compareTo(systemDate) == 0)
+					return "0";
+			}catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			int dayDiff = 0;
+			String ddd="" + year + "-" + month + "-" + day;
+			Date another = Date.valueOf(ddd);
+
+			dayDiff = getDay(another) - getDay(systemDate);
+
+
+			String updateBDate = "insert into datebalance\n" +
+					"select A.accountid, ? , A.balance, ?, A.interest\n" +
+					"from account a where a.interest <> 0";
+
+
+			try(PreparedStatement preparedStatement = _connection.prepareStatement(updateBDate))
+			{
+				preparedStatement.setDate(1, systemDate);
+				preparedStatement.setInt(2, dayDiff);
+				preparedStatement.execute();
+			}catch (SQLException e)
+			{
+				System.err.println(e.getMessage());
+				return "1";
+			}
+
+			String date = "" + year + "-" + month + "-" + day;
+			systemDate = Date.valueOf(date);
+
+			return "0";
+		}
+
+	}
+
+
+	private boolean lastDay(Date date)
+	{
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(systemDate);
+		int res = cal.getActualMaximum(Calendar.DATE);
+		return res == cal.get(Calendar.DAY_OF_MONTH);
+	}
+
+	private int maxDayMonth(Date date)
+	{
+		Calendar cal = Calendar.getInstance();
+
+		cal.setTime(systemDate);
+		return cal.getActualMaximum(Calendar.DATE);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
