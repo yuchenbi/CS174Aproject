@@ -89,26 +89,98 @@ public class Main
 			int newMonValue;
 			String newDay;
 			int newDayValue;
+			String inputBankerCheck;
+			Double inputBankerCheckAmount;
 			ArrayList<String> Schecking = new ArrayList<String>();
 			ArrayList<String> Saving = new ArrayList<String>();
 			ArrayList<String> Pocket = new ArrayList<String>();
 			ArrayList<String> IChecking = new ArrayList<String>();
 
-			int i = 0;
-			app.createCheckingSavingsAccount(AccountType.SAVINGS, "account" + i, 1000.00, "361721022", "Alfred Hitchcock", "6667 El Colegio #40");
-			i++;
-			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "361721022", "Alfred Hitchcock", "6667 El Colegio #40");
-			i++;
-			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "231403227", "Billy Clinton", "5777 Hollister");
-			i++;
-			app.createCheckingSavingsAccount(AccountType.STUDENT_CHECKING, "account" + i, 1000.00, "412231856 ", "Cindy Laugher", "7000 Hollister");
-			i++;
-			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "207843218", "David Copperfill", "1357 State St");
-			i++;
-			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "122219876", "Elizabeth Sailor", "4321 State St");
-			i++;
-			app.createPocketAccount("account" + i, "account0", 100, "361721022");
-			i++;
+//			int i = 0;
+			app.setDate(2011, 3, 1);
+			app.createCheckingSavingsAccountWithBranch(AccountType.STUDENT_CHECKING, "17431", 1200.00, "344151573", "Joe Pepsi", "3210 State St", "San Francisco");
+			app.setPIN("344151573", "1717", "3692");
+			app.createCustomer("17431", "412231856", "Cindy Laugher", "7000 Hollister");
+			app.setPIN("412231856", "1717", "3764");
+			app.createCustomer("17431", "322175130", "Ivan Lendme", "1235 Johnson Dr");
+			app.setPIN("322175130", "1717", "8471");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.STUDENT_CHECKING, "54321", 21000.00, "212431965", "Hurryson Ford", "678 State St", "Los Angeles");
+			app.setPIN("212431965", "1717", "3532");
+			app.createCustomer("54321", "412231856", "Cindy Laugher", "7000 Hollister");
+			app.createCustomer("54321", "122219876", "Elizabeth Sailor", "4321 State St");
+			app.setPIN("122219876", "1717", "3856");
+			app.createCustomer("54321", "203491209", "Nam-Hoi Chung", "1997 People's St HK");
+			app.setPIN("203491209", "1717", "5340");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.STUDENT_CHECKING, "12121", 1200.00, "207843218", "David Copperfill", "1357 State St", "Goleta");
+			app.setPIN("207843218", "1717", "8582");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.INTEREST_CHECKING, "41725", 15000.00, "201674933", "George Brush", "5346 Foothill Av", "Los Angeles");
+			app.setPIN("201674933", "1717", "9824");
+			app.createCustomer("41725", "401605312", "Fatal Castro", "3756 La Cumbre Plaza");
+			app.setPIN("401605312", "1717", "8193");
+			app.createCustomer("41725", "231403227", "Billy Clinton", "5777 Hollister");
+			app.setPIN("231403227", "1717", "1468");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.INTEREST_CHECKING, "76543", 8456.00, "212116070", "Li Kung", "2 People's Rd Beijing", "Santa Barbara");
+			app.setPIN("212116070", "1717", "9173");
+			app.createCustomer("76543", "188212217", "Magic Jordon", "3852 Court Rd");
+			app.setPIN("188212217", "1717", "7351");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.INTEREST_CHECKING, "93156", 2000000.00, "209378521", "Kelvin Costner", "Santa Cruz #3579", "Goleta");
+			app.setPIN("209378521", "1717", "4659");
+			app.createCustomer("93156", "188212217", "Magic Jordon", "3852 Court Rd");
+			app.createCustomer("93156", "210389768", "Olive Stoner", "6689 El Colegio #151");
+			app.setPIN("210389768", "1717", "8452");
+			app.createCustomer("93156", "122219876", "Elizabeth Sailor", "4321 State St");
+			app.createCustomer("93156", "203491209", "Nam-Hoi Chung", "1997 People's St HK");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.SAVINGS, "43942", 1289.00, "361721022", "Alfred Hitchcock", "6667 El Colegio #40", "Santa Barbara");
+			app.setPIN("361721022", "1717", "1234");
+			app.createCustomer("43942", "400651982", "Pit Wilson", "911 State St");
+			app.setPIN("400651982", "1717", "1821");
+			app.createCustomer("43942", "212431965", "Hurryson Ford", "678 State St");
+			app.createCustomer("43942", "322175130", "Ivan Lendme", "1235 Johnson Dr");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.SAVINGS, "29107", 34000.00, "209378521", "Kelvin Costner", "Santa Cruz #3579", "Los Angeles");
+			app.createCustomer("29107", "400651982", "Li Kung", "2 People's Rd Beijing");
+			app.createCustomer("29107", "210389768", "Olive Stoner", "6689 El Colegio #151");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.SAVINGS, "19023", 2300.00, "412231856", "Cindy Laugher", "7000 Hollister", "San Francisco");
+			app.createCustomer("19023", "201674933", "George Brush", "5346 Foothill Av");
+			app.createCustomer("19023", "401605312", "Fatal Castro", "3756 La Cumbre Plaza");
+
+			app.createCheckingSavingsAccountWithBranch(AccountType.SAVINGS, "32156", 1000.00, "188212217", "Magic Jordon", "3852 Court Rd", "Goleta");
+			app.createCustomer("32156", "207843218", "David Copperfill", "1357 State St");
+			app.createCustomer("32156", "122219876", "Elizabeth Sailor", "4321 State St");
+			app.createCustomer("32156", "344151573", "Joe Pepsi", "3210 State St");
+			app.createCustomer("32156", "203491209", "Nam-Hoi Chung", "1997 People's St HK");
+			app.createCustomer("32156", "210389768", "Olive Stoner", "6689 El Colegio #151");
+
+			app.createPocketAccountWithBranch("53027", "12121", 50.00, "207843218", "Goleta");
+			app.createPocketAccountWithBranch("43947", "29107", 30.00, "212116070", "Isla Vista");
+			app.createPocketAccountWithBranch("60413", "43942", 20.00, "400651982", "Santa Cruz");
+			app.createPocketAccountWithBranch("67521", "19023", 100.00, "401605312", "3756 La Cumbre Plaza");
+
+//			app.generateMonthlyReport("207843218");
+//			app.generateMonthlyReport("207843218");
+
+
+
+//			i++;
+//			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "361721022", "Alfred Hitchcock", "6667 El Colegio #40");
+//			i++;
+//			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "231403227", "Billy Clinton", "5777 Hollister");
+//			i++;
+//			app.createCheckingSavingsAccount(AccountType.STUDENT_CHECKING, "account" + i, 1000.00, "412231856 ", "Cindy Laugher", "7000 Hollister");
+//			i++;
+//			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "207843218", "David Copperfill", "1357 State St");
+//			i++;
+//			app.createCheckingSavingsAccount(AccountType.INTEREST_CHECKING, "account" + i, 1000.00, "122219876", "Elizabeth Sailor", "4321 State St");
+//			i++;
+//			app.createPocketAccount("account" + i, "account0", 100, "361721022");
+//			i++;
 //			app.createPocketAccount("account" + i, "account1", 0, "231403227");
 //			i++;
 
@@ -116,7 +188,7 @@ public class Main
 
 
 			do {
-				System.out.println("Which interface?(ATM-App or Bank), setDate or Quit");
+				System.out.println("Which interface?(ATM-App or Bank), SetDate or Quit");
 				UI = input.nextLine();
 				if (!UI.equals("ATM-App") && !UI.equals("Bank") && !UI.equals("SetDate") && !UI.equals("Quit")) {
 					System.out.println("Invalid Input.");
@@ -137,15 +209,15 @@ public class Main
 				}
 
 				if (UI.equals("ATM-App")) {
-					System.out.println("User ID: ");
-					inputUserID = input.nextLine();
-					String quriedPin = app.getPin(inputUserID);
+
+
+//					System.out.println(quriedPin);
 					do {
+						System.out.println("User ID: ");
+						inputUserID = input.nextLine();
 						System.out.println("Pin: ");
 						inputPin = input.nextLine();
-						if (!inputPin.equals(quriedPin)) {
-							System.out.println("Wrong Pin. ");
-						} else {
+						if (app.verifyPIN(inputUserID, inputPin)) {
 							System.out.println("Log in Successfully!");
 							System.out.println("You have following accounts, which one do you want to access?(Type the account name): ");
 							ArrayList<String> account = new ArrayList<String>();
@@ -306,12 +378,15 @@ public class Main
 									}
 								}
 							} while (!inputOpration.equals("Quit"));
-
-
+						} else {
+							System.out.println("Wrong pin or tax ID");
 						}
-					} while (!inputPin.equals(quriedPin));
+					} while (!app.verifyPIN(inputUserID, inputPin));
+				}
 
-				} else {
+
+
+				if(UI.equals("Bank")) {
 					do {
 						do {
 							System.out.println("What do you want to do?");
@@ -342,8 +417,15 @@ public class Main
 							case "1":
 								System.out.println("Enter Account ID: ");
 								inputBankerAccountId = input.nextLine();
-								temp = app.checkTransaction(inputBankerAccountId);
-								System.out.println(temp);
+								do {
+									System.out.println("Enter Amount (>=0): ");
+									inputBankerCheck = input.nextLine();
+									inputBankerCheckAmount = Double.parseDouble(inputBankerCheck);
+									if (inputBankerCheckAmount < 0) {
+										System.out.println("Invalid Amount. ");
+									}
+								} while (inputBankerCheckAmount < 0);
+								app.writeCheck(inputBankerAccountId, inputBankerCheckAmount);
 								break;
 							case "2":
 								System.out.println("Enter Tax ID: ");
@@ -449,7 +531,9 @@ public class Main
 										newInitialBalanceAmount = Double.parseDouble(newInitialBalance);
 										System.out.println("Tax ID: ");
 										newTaxId = input.nextLine();
-										app.createPocketAccount(newAccountId, newLinkedId,newInitialBalanceAmount, newTaxId);
+										System.out.println("Branch Name: ");
+										newBranch= input.nextLine();
+										app.createPocketAccountWithBranch(newAccountId, newLinkedId,newInitialBalanceAmount, newTaxId, newBranch);
 										break;
 								}
 								break;
